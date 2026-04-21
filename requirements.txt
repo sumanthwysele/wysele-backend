@@ -1,8 +1,27 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-psycopg2-binary
-python-jose[cryptography]
-passlib[bcrypt]
-pydantic-settings
-python-dotenv
+# --- Core API Framework ---
+fastapi==0.110.0
+uvicorn==0.27.1
+
+# --- Database & Migrations ---
+sqlalchemy==2.0.27
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# --- Security & Authentication ---
+# [cryptography] ensures the most secure JWT implementation
+python-jose[cryptography]==3.3.0
+# [bcrypt] handles secure password hashing for SOC standards
+passlib[bcrypt]==1.7.4
+# Required for parsing login forms and JSON bodies
+python-multipart==0.0.9
+
+# --- Validation & Environment ---
+pydantic==2.6.1
+pydantic-settings==2.2.1
+# Critical: Fixes the 'ModuleNotFoundError' for EmailStr validation
+email-validator>=2.0.0
+python-dotenv==1.0.1
+
+# --- Utilities & Performance ---
+watchfiles==0.21.0
+httpx==0.27.0
