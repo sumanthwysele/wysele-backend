@@ -45,8 +45,6 @@ async def get_current_user(
     
     return user
 
-# --- ADD THIS FUNCTION TO FIX THE ERROR ---
-
 def get_current_admin(
     current_user: User = Depends(get_current_user),
 ) -> User:

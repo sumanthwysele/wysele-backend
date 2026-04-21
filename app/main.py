@@ -10,6 +10,10 @@ from app.db.init_db import init_db
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi import Request
+from sqlalchemy.exc import SQLAlchemyError
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 1. DATABASE TABLES: Create all tables on startup
 Base.metadata.create_all(bind=engine)
@@ -62,6 +66,14 @@ def startup_event():
 
 # 5. ROUTING: Main API endpoints
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+@app.exception_handler(SQLAlchemyError)
+async def db_exception_handler(request: Request, exc: SQLAlchemyError):
+    logger.error(f"Database error on {request.method} {request.url}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal error occurred. Please contact support."}
+    )
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
