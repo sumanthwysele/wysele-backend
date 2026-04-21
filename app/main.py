@@ -15,9 +15,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# 1. DATABASE TABLES: Create all tables on startup
-Base.metadata.create_all(bind=engine)
-
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
@@ -55,9 +52,10 @@ if settings.BACKEND_CORS_ORIGINS:
 # 3. LOGGING: Track every request for auditing
 app.add_middleware(LoggingMiddleware)
 
-# 4. INITIALIZATION: Run the Root Admin check on startup
+# 4. INITIALIZATION: Create tables and seed root admin on startup
 @app.on_event("startup")
 def startup_event():
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         init_db(db)
