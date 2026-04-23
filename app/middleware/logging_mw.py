@@ -3,37 +3,41 @@ import logging
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-# Configure the logger
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("api_logger")
+security_logger = logging.getLogger("security_logger")
+
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
-        
-        # 1. Capture request details
         method = request.method
-        url = request.url.path
-        client_host = request.client.host
-        
-        # 2. Process the request
+        path = request.url.path
+        ip = request.client.host
+
         response = await call_next(request)
-        
-        # 3. Calculate processing time
-        process_time = (time.time() - start_time) * 1000
-        formatted_process_time = "{0:.2f}ms".format(process_time)
-        
-        # 4. Log the audit data
-        # Example: INFO: 127.0.0.1 - POST /api/v1/blogs/ - 201 Created (14.5ms)
-        logger.info(
-            f"{client_host} - {method} {url} - "
-            f"{response.status_code} - {formatted_process_time}"
-        )
-        
-        # Add the timing to the response header (useful for debugging)
-        response.headers["X-Process-Time"] = formatted_process_time
-        
+
+        process_time = "{0:.2f}ms".format((time.time() - start_time) * 1000)
+        status = response.status_code
+
+        # General request log
+        logger.info(f"{ip} - {method} {path} - {status} - {process_time}")
+
+        # Security event logging
+        if status == 401:
+            security_logger.warning(f"[UNAUTHORIZED] {ip} - {method} {path}")
+        elif status == 403:
+            security_logger.warning(f"[FORBIDDEN] {ip} - {method} {path}")
+        elif status == 429:
+            security_logger.warning(f"[RATE LIMITED] {ip} - {method} {path}")
+        elif path.endswith("/auth/login") and method == "POST":
+            if status == 200:
+                security_logger.info(f"[LOGIN SUCCESS] {ip} - {path}")
+            else:
+                security_logger.warning(f"[LOGIN FAILED] {ip} - {path} - status {status}")
+
+        response.headers["X-Process-Time"] = process_time
         return response

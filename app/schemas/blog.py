@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 
@@ -24,10 +24,8 @@ class BlogUpdate(BaseModel):
 
 # Properties to return to the client
 class BlogResponse(BlogBase):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     author_id: int
     author_name: Optional[str] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True

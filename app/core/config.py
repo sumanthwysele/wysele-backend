@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     # --- API Settings ---
     PROJECT_NAME: str = "Wysele_Backend"
     API_V1_STR: str = "/api/v1"
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = False
     
     # --- Security ---
     SECRET_KEY: str  

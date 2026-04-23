@@ -2,10 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from app.api.v1.api import api_router
-from app.db.base import Base  
+from app.db.base import Base
 from app.db.session import engine, SessionLocal
 from app.core.config import settings
 from app.middleware.logging_mw import LoggingMiddleware
+from app.middleware.security_headers_mw import SecurityHeadersMiddleware
+from app.middleware.rate_limit_mw import RateLimitMiddleware
 from app.db.init_db import init_db
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -17,7 +19,10 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    debug=settings.DEBUG,
+    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
 )
 
 def custom_openapi():
@@ -39,7 +44,7 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-# 2. CORS: Securely pull origins from your .env
+# 2. CORS
 if settings.BACKEND_CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
@@ -49,7 +54,13 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
-# 3. LOGGING: Track every request for auditing
+# 3. SECURITY HEADERS
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 4. RATE LIMITING
+app.add_middleware(RateLimitMiddleware)
+
+# 5. LOGGING
 app.add_middleware(LoggingMiddleware)
 
 # 4. INITIALIZATION: Create tables and seed root admin on startup

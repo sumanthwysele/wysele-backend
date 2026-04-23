@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Optional
 from urllib.parse import urlparse
 from app.api import deps
 from app.models.blog import Blog
 from app.schemas.blog import BlogCreate, BlogUpdate, BlogResponse
+from app.schemas.pagination import PaginatedResponse, paginate
 from app.models.user import User
 
 router = APIRouter()
@@ -20,13 +21,19 @@ def validate_image_url(url: Optional[str]):
     if parsed.hostname in BLOCKED_HOSTS:
         raise HTTPException(status_code=400, detail="Invalid image URL host.")
 
-# 1. PUBLIC: Get all blogs
-@router.get("/", response_model=List[BlogResponse])
-def get_blogs(db: Session = Depends(deps.get_db), category: str = None):
+# 1. PUBLIC: Get all blogs (paginated)
+@router.get("/", response_model=PaginatedResponse[BlogResponse])
+def get_blogs(
+    db: Session = Depends(deps.get_db),
+    category: Optional[str] = None,
+    page: int = Query(default=1, ge=1, description="Page number"),
+    limit: int = Query(default=10, ge=1, le=100, description="Results per page")
+):
     query = db.query(Blog)
     if category and category != "All":
         query = query.filter(Blog.category == category)
-    return query.order_by(Blog.created_at.desc()).all()
+    query = query.order_by(Blog.created_at.desc())
+    return paginate(query, page, limit)
 
 # 2. PUBLIC: Get single blog
 @router.get("/{blog_id}", response_model=BlogResponse)
@@ -36,7 +43,7 @@ def get_blog(blog_id: int, db: Session = Depends(deps.get_db)):
         raise HTTPException(status_code=404, detail="Blog not found")
     return blog
 
-# 3. ADMIN ONLY: Post a new blog
+# 3. ADMIN ONLY: Create blog
 @router.post("/", response_model=BlogResponse)
 def create_blog(
     blog_in: BlogCreate,
@@ -73,7 +80,6 @@ def update_blog(
     if not blog:
         raise HTTPException(status_code=404, detail="Blog not found")
 
-    # A01: ownership check — only author or SUPER_ADMIN can edit
     if blog.author_id != current_user.id and current_user.role != "SUPER_ADMIN":
         raise HTTPException(status_code=403, detail="You can only edit your own blogs.")
 
@@ -98,7 +104,6 @@ def delete_blog(
     if not blog:
         raise HTTPException(status_code=404, detail="Blog not found")
 
-    # A01: ownership check — only author or SUPER_ADMIN can delete
     if blog.author_id != current_user.id and current_user.role != "SUPER_ADMIN":
         raise HTTPException(status_code=403, detail="You do not have permission to delete this blog.")
 
