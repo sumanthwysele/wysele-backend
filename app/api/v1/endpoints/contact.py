@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.api import deps
-from app.models.user import User
 from app.models.contact import ContactInquiry
 from app.schemas.contact import ContactCreate, ContactResponse
 from app.schemas.pagination import PaginatedResponse, paginate
@@ -17,23 +16,21 @@ def submit_inquiry(contact_in: ContactCreate, db: Session = Depends(deps.get_db)
     db.refresh(new_inquiry)
     return new_inquiry
 
-# ADMIN ONLY: Get all inquiries (paginated)
+# PUBLIC: Get all inquiries (paginated)
 @router.get("/all", response_model=PaginatedResponse[ContactResponse])
 def get_all_inquiries(
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_admin),
     page: int = Query(default=1, ge=1, description="Page number"),
     limit: int = Query(default=10, ge=1, le=100, description="Results per page")
 ):
     query = db.query(ContactInquiry).order_by(ContactInquiry.created_at.desc())
     return paginate(query, page, limit)
 
-# SUPER_ADMIN ONLY: Delete inquiry
+# PUBLIC: Delete inquiry
 @router.delete("/{inquiry_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_inquiry(
     inquiry_id: int,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_super_admin)
+    db: Session = Depends(deps.get_db)
 ):
     inquiry = db.query(ContactInquiry).filter(ContactInquiry.id == inquiry_id).first()
     if not inquiry:

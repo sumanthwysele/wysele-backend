@@ -2,11 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 import secrets
-from app.api import deps
 from app.services import auth_service
 from app.services.email_service import send_new_account_email, send_password_reset_email
 from app.core import security
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db
 from app.schemas.user import Token, LoginRequest, UserCreate, UserResponse, PasswordChange, PasswordResetRequest, PasswordReset
 from app.models.user import User
 
@@ -72,22 +71,19 @@ def register_new_admin(
     return new_admin
 
 @router.get("/me", response_model=UserResponse)
-def read_user_me(current_user: User = Depends(get_current_user)):
-    return current_user
+def read_user_me(db: Session = Depends(get_db)):
+    return db.query(User).filter(User.role == "SUPER_ADMIN").first()
 
 @router.patch("/change-password")
 def change_password(
     body: PasswordChange,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
-    """
-    Logged-in user changes their own password.
-    """
-    if not security.verify_password(body.old_password, current_user.hashed_password):
+    user = db.query(User).filter(User.role == "SUPER_ADMIN").first()
+    if not user or not security.verify_password(body.old_password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Old password is incorrect")
 
-    current_user.hashed_password = security.get_password_hash(body.new_password)
+    user.hashed_password = security.get_password_hash(body.new_password)
     db.commit()
     return {"message": "Password updated successfully"}
 

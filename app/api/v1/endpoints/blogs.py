@@ -6,7 +6,6 @@ from app.api import deps
 from app.models.blog import Blog
 from app.schemas.blog import BlogCreate, BlogUpdate, BlogResponse
 from app.schemas.pagination import PaginatedResponse, paginate
-from app.models.user import User
 
 router = APIRouter()
 
@@ -43,45 +42,34 @@ def get_blog(blog_id: int, db: Session = Depends(deps.get_db)):
         raise HTTPException(status_code=404, detail="Blog not found")
     return blog
 
-# 3. ADMIN ONLY: Create blog
+# 3. PUBLIC: Create blog
 @router.post("/", response_model=BlogResponse)
 def create_blog(
     blog_in: BlogCreate,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_admin)
+    db: Session = Depends(deps.get_db)
 ):
-    if not current_user.can_post_blog:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No permission to post blogs.")
-
     validate_image_url(blog_in.image_url)
 
     new_blog = Blog(
         **blog_in.model_dump(),
-        author_id=current_user.id,
-        author_name=f"{current_user.first_name} {current_user.last_name}"
+        author_id=None,
+        author_name="Admin"
     )
     db.add(new_blog)
     db.commit()
     db.refresh(new_blog)
     return new_blog
 
-# 4. ADMIN ONLY: Update blog (author or SUPER_ADMIN)
+# 4. PUBLIC: Update blog
 @router.put("/{blog_id}", response_model=BlogResponse)
 def update_blog(
     blog_id: int,
     blog_in: BlogUpdate,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_admin)
+    db: Session = Depends(deps.get_db)
 ):
-    if not current_user.can_edit_blog:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No permission to edit blogs.")
-
     blog = db.query(Blog).filter(Blog.id == blog_id).first()
     if not blog:
         raise HTTPException(status_code=404, detail="Blog not found")
-
-    if blog.author_id != current_user.id and current_user.role != "SUPER_ADMIN":
-        raise HTTPException(status_code=403, detail="You can only edit your own blogs.")
 
     if blog_in.image_url:
         validate_image_url(blog_in.image_url)
@@ -93,19 +81,15 @@ def update_blog(
     db.refresh(blog)
     return blog
 
-# 5. ADMIN ONLY: Delete blog (author or SUPER_ADMIN)
+# 5. PUBLIC: Delete blog
 @router.delete("/{blog_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_blog(
     blog_id: int,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_admin)
+    db: Session = Depends(deps.get_db)
 ):
     blog = db.query(Blog).filter(Blog.id == blog_id).first()
     if not blog:
         raise HTTPException(status_code=404, detail="Blog not found")
-
-    if blog.author_id != current_user.id and current_user.role != "SUPER_ADMIN":
-        raise HTTPException(status_code=403, detail="You do not have permission to delete this blog.")
 
     db.delete(blog)
     db.commit()

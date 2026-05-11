@@ -8,24 +8,22 @@ from app.core import security
 
 router = APIRouter()
 
-# --- 1. GET ALL (ROOT ONLY) ---
+# --- 1. GET ALL ---
 @router.get("/", response_model=List[UserResponse])
 def read_admins(
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_super_admin)
+    db: Session = Depends(deps.get_db)
 ):
     """
     Returns the list of all admins with their permission statuses.
     """
     return db.query(User).filter(User.role == "ADMIN").order_by(User.created_at.desc()).all()
 
-# --- 2. PUT / EDIT DETAILS (ROOT ONLY) ---
+# --- 2. PUT / EDIT DETAILS ---
 @router.put("/{admin_id}", response_model=UserResponse)
 def update_admin(
     admin_id: int,
     user_in: UserUpdate,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_super_admin)
+    db: Session = Depends(deps.get_db)
 ):
     """
     Update admin Identity, Security, or Control flags.
@@ -47,14 +45,13 @@ def update_admin(
     db.refresh(admin)
     return admin
 
-# --- 4. PATCH / PERMISSIONS (ROOT ONLY) ---
+# --- 4. PATCH / PERMISSIONS ---
 @router.patch("/{admin_id}/permissions", response_model=UserResponse)
 def update_admin_permissions(
     admin_id: int,
     can_post: Optional[bool] = None,
     can_edit: Optional[bool] = None,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_super_admin)
+    db: Session = Depends(deps.get_db)
 ):
     """
     Specific endpoint to toggle an admin's ability to post or edit blogs.
@@ -72,24 +69,17 @@ def update_admin_permissions(
     db.refresh(admin)
     return admin
 
-# --- 5. PATCH / STATUS (ROOT ONLY) ---
+# --- 5. PATCH / STATUS ---
 @router.patch("/{admin_id}/status", response_model=UserResponse)
 def toggle_admin_status(
     admin_id: int,
     active_status: bool,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_super_admin)
+    db: Session = Depends(deps.get_db)
 ):
     admin = db.query(User).filter(User.id == admin_id).first()
     if not admin:
         raise HTTPException(status_code=404, detail="Admin not found")
-    
-    if admin.id == current_user.id and active_status is False:
-        raise HTTPException(
-            status_code=400, 
-            detail="You cannot deactivate the primary Root account."
-        )
-    
+
     admin.is_active = active_status
     db.commit()
     db.refresh(admin)

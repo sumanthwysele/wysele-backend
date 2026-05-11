@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
-import base64, uuid
+import base64
 from app.api import deps
-from app.models.user import User
 from app.models.job import Job
 from app.models.application import Application
 from app.schemas.job import JobCreate, JobUpdate, JobResponse
@@ -14,14 +13,13 @@ from typing import List
 router = APIRouter()
 
 
-# POST /jobs — Admin or HR can create jobs
+# POST /jobs — Public
 @router.post("/", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 def create_job(
     job_in: JobCreate,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_hr_or_admin)
+    db: Session = Depends(deps.get_db)
 ):
-    return job_service.create_job(db, job_in, current_user.id)
+    return job_service.create_job(db, job_in, posted_by=1)
 
 
 # GET /jobs/search — Public search by role, region, skills, experience
@@ -71,25 +69,23 @@ def get_job(job_id: int, db: Session = Depends(deps.get_db)):
     return job_service.get_job_by_id(db, job_id)
 
 
-# PUT /jobs/{id} — Admin or HR (owner or SUPER_ADMIN)
+# PUT /jobs/{id} — Public
 @router.put("/{job_id}", response_model=JobResponse)
 def update_job(
     job_id: int,
     job_in: JobUpdate,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_hr_or_admin)
+    db: Session = Depends(deps.get_db)
 ):
-    return job_service.update_job(db, job_id, job_in, current_user.id, current_user.role == "SUPER_ADMIN")
+    return job_service.update_job(db, job_id, job_in, current_user_id=1, is_super_admin=True)
 
 
-# DELETE /jobs/{id} — Admin or HR (owner or SUPER_ADMIN), soft delete
+# DELETE /jobs/{id} — Public, soft delete
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_job(
     job_id: int,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_hr_or_admin)
+    db: Session = Depends(deps.get_db)
 ):
-    job_service.delete_job(db, job_id, current_user.id, current_user.role == "SUPER_ADMIN")
+    job_service.delete_job(db, job_id, current_user_id=1, is_super_admin=True)
 
 
 # POST /jobs/{id}/apply — Public (applicants), multipart form with resume file
@@ -134,12 +130,11 @@ def apply_for_job(
     return job_service.apply_for_job(db, job_id, app_in)
 
 
-# GET /jobs/{id}/applications — Admin or HR only
+# GET /jobs/{id}/applications — Public
 @router.get("/{job_id}/applications", response_model=List[ApplicationResponse])
 def get_job_applications(
     job_id: int,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_hr_or_admin)
+    db: Session = Depends(deps.get_db)
 ):
     return job_service.get_applicants_for_job(db, job_id)
 
