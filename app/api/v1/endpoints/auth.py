@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 import secrets
+from app.api import deps
 from app.services import auth_service
 from app.services.email_service import send_new_account_email, send_password_reset_email
 from app.core import security
-from app.api.deps import get_db
+from app.api.deps import get_db, get_current_user, get_current_super_admin
 from app.schemas.user import Token, LoginRequest, UserCreate, UserResponse, PasswordChange, PasswordResetRequest, PasswordReset
 from app.models.user import User
 
@@ -33,9 +34,10 @@ def register_new_admin(
     user_in: UserCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_super_admin)
 ):
     """
-    Only SUPER_ADMIN can create a new admin.
+    Only SUPER_ADMIN can create ADMIN or HR users.
     """
     if db.query(User).filter(User.email == user_in.email).first():
         raise HTTPException(status_code=400, detail="Email already exists")
@@ -43,7 +45,10 @@ def register_new_admin(
     if db.query(User).filter(User.employee_id == user_in.employee_id).first():
         raise HTTPException(status_code=400, detail="Employee ID already exists")
 
-    new_admin = User(
+    if user_in.role not in ["ADMIN", "HR"]:
+        raise HTTPException(status_code=400, detail="Role must be ADMIN or HR")
+
+    new_user = User(
         email=user_in.email,
         employee_id=user_in.employee_id,
         hashed_password=security.get_password_hash(user_in.password),
@@ -51,39 +56,39 @@ def register_new_admin(
         middle_name=user_in.middle_name,
         last_name=user_in.last_name,
         phone_number=user_in.phone_number,
-        role="ADMIN",
+        role=user_in.role,
         company_id=user_in.company_id,
         is_active=True,
-        created_by_id=None
+        created_by_id=current_user.id
     )
 
-    db.add(new_admin)
+    db.add(new_user)
     db.commit()
-    db.refresh(new_admin)
+    db.refresh(new_user)
 
     background_tasks.add_task(
         send_new_account_email,
-        email_to=new_admin.email,
-        username=new_admin.email,
+        email_to=new_user.email,
+        username=new_user.email,
         password=user_in.password
     )
 
-    return new_admin
+    return new_user
 
 @router.get("/me", response_model=UserResponse)
-def read_user_me(db: Session = Depends(get_db)):
-    return db.query(User).filter(User.role == "SUPER_ADMIN").first()
+def read_user_me(current_user: User = Depends(get_current_user)):
+    return current_user
 
 @router.patch("/change-password")
 def change_password(
     body: PasswordChange,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    user = db.query(User).filter(User.role == "SUPER_ADMIN").first()
-    if not user or not security.verify_password(body.old_password, user.hashed_password):
+    if not security.verify_password(body.old_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Old password is incorrect")
 
-    user.hashed_password = security.get_password_hash(body.new_password)
+    current_user.hashed_password = security.get_password_hash(body.new_password)
     db.commit()
     return {"message": "Password updated successfully"}
 

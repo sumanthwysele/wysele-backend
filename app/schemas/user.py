@@ -13,6 +13,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8, description="Password must be at least 8 characters")
+    role: str = Field(..., description="Role must be ADMIN or HR")
 
 class UserResponse(UserBase):
     model_config = ConfigDict(from_attributes=True)
