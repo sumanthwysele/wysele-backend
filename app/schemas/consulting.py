@@ -8,6 +8,7 @@ class OTPRequest(BaseModel):
 
 
 class OTPVerify(BaseModel):
+    email: EmailStr
     otp: str
 
 

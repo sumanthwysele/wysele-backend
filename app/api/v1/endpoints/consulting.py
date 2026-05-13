@@ -59,38 +59,24 @@ def send_otp(body: OTPRequest, background_tasks: BackgroundTasks, db: Session = 
     return {"message": "OTP sent to your email. It expires in 10 minutes."}
 
 
-# STEP 2: Verify OTP
-@router.post("/verify-otp")
-def verify_otp(body: OTPVerify, db: Session = Depends(deps.get_db)):
+# STEP 2: Submit form — OTP passed as separate query param
+@router.post("/submit", response_model=ConsultingResponse)
+def submit_consulting(
+    body: ConsultingCreate,
+    otp: str = Query(..., description="OTP received on email"),
+    db: Session = Depends(deps.get_db)
+):
     record = db.query(EmailVerification).filter(
         EmailVerification.email == body.email,
         EmailVerification.purpose == PURPOSE,
         EmailVerification.is_verified == False,
+        EmailVerification.otp == otp
     ).order_by(EmailVerification.created_at.desc()).first()
 
     if not record:
-        raise HTTPException(status_code=400, detail="No pending OTP found for this email")
+        raise HTTPException(status_code=400, detail="Invalid OTP")
     if datetime.now(timezone.utc) > record.expires_at:
         raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one")
-    if record.otp != body.otp:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
-
-    record.is_verified = True
-    db.commit()
-    return {"message": "Email verified successfully."}
-
-
-# STEP 3: Submit form
-@router.post("/submit", response_model=ConsultingResponse)
-def submit_consulting(body: ConsultingCreate, db: Session = Depends(deps.get_db)):
-    verified = db.query(EmailVerification).filter(
-        EmailVerification.email == body.email,
-        EmailVerification.purpose == PURPOSE,
-        EmailVerification.is_verified == True,
-    ).order_by(EmailVerification.created_at.desc()).first()
-
-    if not verified:
-        raise HTTPException(status_code=403, detail="Email not verified. Please verify your email first")
 
     inquiry = ConsultingInquiry(
         name=body.name,
@@ -101,7 +87,7 @@ def submit_consulting(body: ConsultingCreate, db: Session = Depends(deps.get_db)
         message=body.message,
     )
     db.add(inquiry)
-    db.delete(verified)
+    db.delete(record)
     db.commit()
     db.refresh(inquiry)
     return inquiry

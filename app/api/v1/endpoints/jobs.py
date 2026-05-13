@@ -25,7 +25,7 @@ def _generate_otp() -> str:
     return "".join(random.choices(string.digits, k=6))
 
 
-# POST /jobs/send-otp — Step 1
+# POST /jobs/send-otp — Send OTP to email before applying
 @router.post("/send-otp")
 def send_application_otp(body: OTPRequest, background_tasks: BackgroundTasks, db: Session = Depends(deps.get_db)):
     otp = _generate_otp()
@@ -45,28 +45,10 @@ def send_application_otp(body: OTPRequest, background_tasks: BackgroundTasks, db
     return {"message": "OTP sent to your email. It expires in 10 minutes."}
 
 
-# POST /jobs/verify-otp — Step 2
-@router.post("/verify-otp")
-def verify_application_otp(body: OTPVerify, db: Session = Depends(deps.get_db)):
-    record = db.query(EmailVerification).filter(
-        EmailVerification.purpose == PURPOSE,
-        EmailVerification.is_verified == False,
-        EmailVerification.otp == body.otp
-    ).order_by(EmailVerification.created_at.desc()).first()
-
-    if not record:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
-    if datetime.now(timezone.utc) > record.expires_at:
-        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one")
-
-    record.is_verified = True
-    db.commit()
-    return {"message": "Email verified successfully.", "email": record.email}
-
-
-# POST /jobs/apply — Step 3 (job_id as form field)
+# POST /jobs/apply — Submit full form, otp as separate query param
 @router.post("/apply", response_model=ApplicationResponse, status_code=status.HTTP_201_CREATED)
 def apply_for_job(
+    otp: str = Query(..., description="OTP received on email"),
     job_id: int = Form(...),
     firstName: str = Form(...),
     lastName: str = Form(...),
@@ -81,15 +63,20 @@ def apply_for_job(
     expectedCtc: str = Form(None),
     db: Session = Depends(deps.get_db)
 ):
-    verified = db.query(EmailVerification).filter(
+    # Verify OTP inline
+    record = db.query(EmailVerification).filter(
         EmailVerification.email == email,
         EmailVerification.purpose == PURPOSE,
-        EmailVerification.is_verified == True,
+        EmailVerification.is_verified == False,
+        EmailVerification.otp == otp
     ).order_by(EmailVerification.created_at.desc()).first()
 
-    if not verified:
-        raise HTTPException(status_code=403, detail="Email not verified. Please verify your email before applying")
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    if datetime.now(timezone.utc) > record.expires_at:
+        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one")
 
+    # Validate resume file type
     ext = resume.filename.rsplit(".", 1)[-1].lower() if "." in resume.filename else ""
     if ext not in ("pdf", "docx"):
         raise HTTPException(status_code=400, detail="Resume must be a PDF or DOCX file")
@@ -112,7 +99,9 @@ def apply_for_job(
         expectedCtc=expectedCtc,
     )
     result = job_service.apply_for_job(db, job_id, app_in)
-    db.delete(verified)
+
+    # Mark OTP as used
+    db.delete(record)
     db.commit()
     return result
 
