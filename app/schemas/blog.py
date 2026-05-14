@@ -26,6 +26,4 @@ class BlogUpdate(BaseModel):
 class BlogResponse(BlogBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    author_id: int
-    author_name: Optional[str] = None
     created_at: datetime

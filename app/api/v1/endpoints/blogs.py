@@ -50,11 +50,7 @@ def create_blog(
 ):
     validate_image_url(blog_in.image_url)
 
-    new_blog = Blog(
-        **blog_in.model_dump(),
-        author_id=None,
-        author_name="Admin"
-    )
+    new_blog = Blog(**blog_in.model_dump())
     db.add(new_blog)
     db.commit()
     db.refresh(new_blog)

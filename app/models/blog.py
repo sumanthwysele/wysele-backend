@@ -15,5 +15,5 @@ class Blog(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     
     # Author Info
-    author_id = Column(Integer, ForeignKey("users.id"))
-    author_name = Column(String) # For fast display without extra joins
+    author_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    author_name = Column(String, nullable=True)
