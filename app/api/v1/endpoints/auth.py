@@ -1,11 +1,12 @@
 import secrets
 import string
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Response, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from app.services import auth_service
 from app.services.email_service import send_new_account_email, send_password_reset_email
 from app.core import security
+from app.core.config import settings
 from app.api.deps import get_db, get_current_user, get_current_super_admin
 from app.schemas.user import Token, LoginRequest, UserRegister, UserResponse, PasswordChange, PasswordResetRequest, PasswordReset
 from app.models.user import User
@@ -19,7 +20,7 @@ def generate_random_password(length: int = 12) -> str:
 
 
 @router.post("/login", response_model=Token)
-def login(credentials: LoginRequest, db: Session = Depends(get_db)):
+def login(credentials: LoginRequest, response: Response, db: Session = Depends(get_db)):
     user = auth_service.authenticate(db, email=credentials.email, password=credentials.password)
 
     if not user or user.role not in ["ADMIN", "SUPER_ADMIN", "HR"]:
@@ -29,12 +30,31 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Account deactivated")
 
     access_token = security.create_access_token(data={"sub": user.email})
+    is_production = settings.ENVIRONMENT == "production"
+
+    # Always set HttpOnly cookie
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=is_production,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    )
+
     return {
-        "access_token": access_token,
         "token_type": "bearer",
         "role": user.role,
         "is_first_login": user.is_first_login,
+        # Return token in body only in development for Swagger testing
+        "access_token": access_token if not is_production else None,
     }
+
+
+@router.post("/logout")
+def logout(response: Response):
+    response.delete_cookie(key="access_token", httponly=True, samesite="lax")
+    return {"message": "Logged out successfully"}
 
 
 @router.post("/register", response_model=UserResponse)

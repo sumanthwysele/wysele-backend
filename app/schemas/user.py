@@ -91,10 +91,10 @@ class LoginRequest(BaseModel):
 
 
 class Token(BaseModel):
-    access_token: str
     token_type: str
     role: str
     is_first_login: bool
+    access_token: Optional[str] = None
 
 
 class PasswordChange(BaseModel):

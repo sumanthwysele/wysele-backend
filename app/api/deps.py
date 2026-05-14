@@ -12,21 +12,24 @@ def get_db():
         db.close()
 
 async def get_current_user(
-    request: Request, 
+    request: Request,
     db: Session = Depends(get_db)
 ) -> User:
-    # 1. Manually get the Authorization header
-    auth_header = request.headers.get("Authorization")
-    
-    if not auth_header or not auth_header.startswith("Bearer "):
+    # 1. Try HttpOnly cookie first
+    token = request.cookies.get("access_token")
+
+    # 2. Fallback to Authorization header (for Swagger/testing)
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid Authorization header",
+            detail="Not authenticated",
         )
 
-    # 2. Extract the token
-    token = auth_header.split(" ")[1]
-    
     # 3. Verify the JWT
     email = decode_access_token(token)
     if email is None:
@@ -39,10 +42,10 @@ async def get_current_user(
     user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
-    
+
     return user
 
 def get_current_admin(
